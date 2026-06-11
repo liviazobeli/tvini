@@ -1,57 +1,283 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>tvini – Pixel Panda</title>
-  <style>
-    body {
-      background: #fafafa;
-      font-family: monospace;
-      max-width: 700px;
-      margin: 40px auto;
-      position: relative;
-      height: 300px;
-      overflow: hidden;
-    }
-
-    h1 { color: #333; }
-
-    .ground {
-      position: absolute;
-      bottom: 40px;
-      left: 0;
-      width: 100%;
-      height: 3px;
-      background: #333;
-    }
-
-    .panda {
-      position: absolute;
-      bottom: 40px;
-      left: 20px;
-      width: 80px;
-      height: 80px;
-      background: transparent;
-      display: grid;
-      grid-template-columns: repeat(8, 10px);
-      grid-template-rows: repeat(8, 10px);
-    }
-
-    .p { background: #000; }      
-    .w { background: #fff; }      
-    .t { background: transparent; } 
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tvini – Pixel Panda</title>
+<style>
+  :root {
+    --ink: #535353;
+    --paper: #f7f7f7;
+  }
+  body {
+    background: var(--paper);
+    font-family: monospace;
+    max-width: 700px;
+    margin: 40px auto;
+    color: var(--ink);
+  }
+  h1 {
+    color: var(--ink);
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+  #scene {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: pointer;
+    outline: none;
+  }
+</style>
 </head>
 <body>
 
 <h1>welcome to tvini</h1>
 
+<canvas id="scene" width="700" height="260" tabindex="0"></canvas>
 
-<div class="panda" id="panda">
+<script>
+(() => {
+  const cv = document.getElementById('scene');
+  const cx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const PX = 6;
+  const GROUND_Y = 230;
 
-  <div class="t"></div><div class="p"></div><div class="p"></div><div class="t"></div><div class="p"></div><div class="p"></div><div class="t"></div><div class="t"></div>
-  <div class="p"></div><div class="w"></div><div class="w"></div><div class="p"></div><div class="w"></div><div class="w"></div><div class="p"></div><div class="t"></div>
-  <div class="p"></div><div class="w"></div><div class="w"></div><div class="p"></div><div class="w"></div><div class="w"></div><div class="p"></div><div class="t"></div>
-  <div class="t"></div><div class="p"></div><div class="p"></div><div class="w"></div><div class="p"></div><div class="p"></div><div class="t"></div><div class="t"></div>
-  <div class="t"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="w"></div><div class="t"></div><div class="t"></div><div class="t"></div>
-  <div class="t"></div><div class="w"></div><div class="p">
+  const INK   = '#535353';
+  const FAINT = '#dfdfdf';
+  const COLORS = { K: INK, O: INK, W: '#ffffff' };
+
+  // ---------- Panda-Sprite (Blick nach rechts) ----------
+  const BODY = [
+    "...............KKK........",
+    "..............KKKKK.......",
+    ".......OOOOOOOKKKKKOO.....",
+    "......OWWWWWWWKKKWWWWO....",
+    ".....OWWWWWWWWWWWWWWWWO...",
+    ".....OWWWWWWWWWKKKWWWWWO..",
+    "....OWWWWWWWWWWKKKWWWWWKK.",
+    "...OWWWWWWWWWWWWKKWWWWWKK.",
+    "..OWWWWWWWWWWWWWWWWWWWO...",
+    "..OWWWWWWWWWWWWWWWWWWO....",
+    "..OWWWWWWWWWWWWWWWWWO.....",
+    "..OWKKKKWWWWWWWKKKKWO.....",
+    "..OWKKKKKWWWWWKKKKKO......",
+    "...OKKKKKOOOOOKKKKK.......",
+  ];
+  const LEGS_A = [
+    "....KKKK......KKKK........",
+    "....KKKK......KKKK........",
+    "....KKKKK.....KKKKK.......",
+  ];
+  const LEGS_B = [
+    "...KKKK........KKKK.......",
+    "...KKKK........KKKK.......",
+    "..KKKKK.......KKKKK.......",
+  ];
+  const LEGS_JUMP = [
+    "....KKKK......KKKK........",
+    "....KKKKK.....KKKKK.......",
+    "..........................",
+  ];
+
+  const SPRITE_W = 26 * PX;
+  const SPRITE_H = (BODY.length + 3) * PX;
+
+  function drawSprite(rows, x, y) {
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const ch = rows[r][c];
+        if (ch === '.') continue;
+        cx.fillStyle = COLORS[ch];
+        cx.fillRect(x + c * PX, y + r * PX, PX, PX);
+      }
+    }
+  }
+
+  // Panda komplett zeichnen, optional um Vielfache von 90° gedreht
+  // (bleibt dadurch schön pixelig – kein Antialiasing)
+  function drawPanda(x, y, legs, quarterTurns) {
+    if (!quarterTurns) {
+      drawSprite(BODY, x, y);
+      drawSprite(legs, x, y + BODY.length * PX);
+      return;
+    }
+    cx.save();
+    cx.translate(x + SPRITE_W / 2, y + SPRITE_H / 2);
+    cx.rotate(quarterTurns * Math.PI / 2);
+    cx.translate(-SPRITE_W / 2, -SPRITE_H / 2);
+    drawSprite(BODY, 0, 0);
+    drawSprite(legs, 0, BODY.length * PX);
+    cx.restore();
+  }
+
+  // ---------- Bambus ----------
+  function drawStalk(x, baseY, hCells, px, color, leaf) {
+    cx.fillStyle = color;
+    for (let r = 0; r < hCells; r++) {
+      const y = baseY - (r + 1) * px;
+      const node = (r % 5 === 4);
+      const w = node ? 5 : 3;
+      const off = node ? -1 : 0;
+      cx.fillRect(x + off * px, y, w * px, px);
+    }
+    if (leaf) {
+      const topY = baseY - hCells * px;
+      cx.fillRect(x + 3 * px, topY - px, 2 * px, px);
+      cx.fillRect(x + 4 * px, topY - 2 * px, 2 * px, px);
+      cx.fillRect(x - 2 * px, topY, 2 * px, px);
+    }
+  }
+
+  
+  const pandaX = 30;
+  let y = 0, vy = 0, onGround = true, t = 0;
+  let speed = 5, dist = 0, nextAt = 500, score = 0;
+  let stumble = 0;            
+  const STUMBLE_FRAMES = 56;
+  let obstacles = [];
+  const bg = Array.from({ length: 6 }, (_, i) => ({
+    x: i * 130 + Math.random() * 80,
+    h: 16 + Math.floor(Math.random() * 8),
+    leaf: Math.random() < 0.8
+  }));
+
+  function jump() {
+    if (onGround && !stumble) { vy = -11.5; onGround = false; }
+  }
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      e.preventDefault(); jump();
+    }
+  });
+  cv.addEventListener('pointerdown', jump);
+
+  function spawn() {
+    const n = 1 + Math.floor(Math.random() * 2);   
+    const stalks = [];
+    let off = 0;
+    for (let i = 0; i < n; i++) {
+      stalks.push({ off, h: 3 + Math.floor(Math.random() * 3) }); 
+      off += 3 * PX;
+    }
+    obstacles.push({ x: W + 20, stalks, w: off + 3 * PX, hit: false });
+  }
+
+  function hits(o) {
+
+    if (!onGround) return false;
+    const px1 = pandaX + 11 * PX, px2 = pandaX + 22 * PX;
+    for (const s of o.stalks) {
+      const sx1 = o.x + s.off, sx2 = sx1 + 3 * PX;
+      if (px1 < sx2 && px2 > sx1) return true;
+    }
+    return false;
+  }
+
+  function drawStars(x, y, phase) {
+    cx.fillStyle = INK;
+    for (let i = 0; i < 3; i++) {
+      const a = phase / 7 + i * 2.1;
+      const sx = x + Math.cos(a) * 34;
+      const sy = y - 14 + Math.sin(a) * 10;
+      cx.fillRect(sx - 1, sy - 5, 2, 10);
+      cx.fillRect(sx - 5, sy - 1, 10, 2);
+    }
+  }
+
+  function frame() {
+    t++;
+    const effSpeed = stumble ? speed * 0.45 : speed;   
+    dist += effSpeed;
+    if (!stumble) {
+      score = Math.floor(dist / 10);
+      speed = Math.min(11, 5 + score / 300);
+    }
+
+    if (!onGround) {
+      y += vy; vy += 0.5;
+      if (y >= 0) { y = 0; vy = 0; onGround = true; }
+    }
+
+    for (const b of bg) {
+      b.x -= effSpeed * 0.3;
+      if (b.x < -60) {
+        b.x = W + Math.random() * 100;
+        b.h = 16 + Math.floor(Math.random() * 8);
+      }
+    }
+
+    if (dist > nextAt) {
+      spawn();
+      nextAt = dist + 320 + Math.random() * 340 + speed * 30;
+    }
+    for (const o of obstacles) o.x -= effSpeed;
+    obstacles = obstacles.filter(o => o.x + o.w > -20);
+
+    if (stumble) {
+      stumble--;
+    } else {
+      for (const o of obstacles) {
+        if (!o.hit && hits(o)) {
+          o.hit = true;               
+          stumble = STUMBLE_FRAMES;
+        }
+      }
+    }
+
+    cx.clearRect(0, 0, W, H);
+
+    for (const b of bg) drawStalk(b.x, GROUND_Y, b.h, PX, FAINT, b.leaf);
+
+    cx.fillStyle = INK;
+    cx.fillRect(0, GROUND_Y, W, 2);
+    for (let i = 0; i < 14; i++) {
+      const bx = ((i * 53 - dist) % W + W) % W;
+      cx.fillRect(bx, GROUND_Y + 8, 4 + (i * 7) % 8, 2);
+    }
+
+    for (const o of obstacles) {
+      for (const s of o.stalks) {
+        if (o.hit) {
+        
+          cx.fillStyle = INK;
+          for (let r = 0; r < s.h * 3; r++) {
+            const node = (r % 5 === 4);
+            cx.fillRect(o.x + s.off + r * PX, GROUND_Y - (node ? 2 : 1) * PX,
+                        PX, (node ? 2 : 1) * PX);
+          }
+        } else {
+          drawStalk(o.x + s.off, GROUND_Y, s.h, PX, INK, s.h >= 5);
+        }
+      }
+    }
+
+    const py = GROUND_Y - SPRITE_H + 2 + y;
+    if (stumble) {
+     
+      const progress = 1 - stumble / STUMBLE_FRAMES;
+      const turns = Math.floor(progress * 4) % 4;
+      const wobble = (stumble % 8 < 4) ? 2 : -2;
+      drawPanda(pandaX, py + wobble, LEGS_JUMP, turns);
+      drawStars(pandaX + SPRITE_W / 2, py, t);
+    } else {
+      const legs = !onGround ? LEGS_JUMP
+                 : (Math.floor(t / 8) % 2 === 0 ? LEGS_A : LEGS_B);
+      drawPanda(pandaX, py, legs, 0);
+    }
+
+    cx.fillStyle = INK;
+    cx.font = 'bold 14px monospace';
+    cx.textAlign = 'right';
+    cx.fillText(String(score).padStart(5, '0'), W - 8, 20);
+
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+</body>
+</html>
